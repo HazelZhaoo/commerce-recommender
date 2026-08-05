@@ -1,0 +1,17 @@
+# data — large, downloaded separately (see README)
+data/
+
+# virtual environments
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.egg-info/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
