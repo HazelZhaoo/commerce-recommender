@@ -47,6 +47,11 @@ def prepare(df, test_frac=0.2, min_user=5, min_item=5):
     matrix = build_user_item_matrix(train, user_map, item_map)
     warm_truth, cold_truth = build_eligibility(test_raw, user_map, item_map)
     seen = seen_items_by_user(train, user_map, item_map)
+     # A warm user's already-seen items are excluded at recommend time, so they can
+    # never be recommended -> drop them from the truth set too (same principle as
+    # cold-start eligibility: don't grade the model on what it structurally can't do).
+    warm_truth = {u: items - seen.get(u, set()) for u, items in warm_truth.items()}
+    warm_truth = {u: items for u, items in warm_truth.items() if items}  # drop now-empty
     return {
         "cutoff": cutoff, "user_map": user_map, "item_map": item_map,
         "matrix": matrix, "warm_truth": warm_truth,
