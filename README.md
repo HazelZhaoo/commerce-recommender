@@ -63,6 +63,17 @@ python scripts/train.py
 
 *Measured results and the baseline-vs-ALS comparison will be added here once the evaluation harness is complete. Numbers will reflect only what has actually been run.*
 
+## Roadmap — from model to system
+
+Once the modeling core (baseline vs. ALS, evaluated) is done, the next step is to wrap it in a **systems layer** so this is an *end-to-end ML system*, not just a notebook. This is the part that turns a modeling exercise into an ML-engineering project:
+
+- [ ] **Serving:** expose top-N recommendations behind a small **FastAPI** endpoint (`/recommend?user_id=...`).
+- [ ] **Packaging:** **Dockerize** so training + serving are reproducible with one command.
+- [ ] **Monitoring:** basic drift / freshness checks and request-latency logging.
+- [ ] *(stretch)* candidate-generation → ranking split, to mirror a real two-stage recsys.
+
+> **Why this matters:** a serving + Docker + monitoring layer around the model demonstrates more ML-engineering signal than adding more model variety. It's the difference between "I fit a model" and "I shipped a system."
+
 ---
 
 *Dataset: RetailRocket (via Kaggle, CC BY-NC-SA 4.0). Modeling with the [`implicit`](https://github.com/benfred/implicit) library.*
