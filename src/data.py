@@ -13,11 +13,18 @@ import scipy.sparse as sp
 EVENT_WEIGHTS = {"view": 1.0, "addtocart": 2.0, "transaction": 3.0}
 
 
-def load_events(path, event_weights=EVENT_WEIGHTS):
-    df = pd.read_csv(path, usecols=["timestamp", "visitorid", "event", "itemid"])
-    df = df[df["event"].isin(event_weights)].copy()
-    df["weight"] = df["event"].map(event_weights).astype("float32")
-    df = df.rename(columns={"visitorid": "user", "itemid": "item"})
+def load_amazon(path , min_rating = 4):
+    """Load Amazon ratings and turn explicit 1-5 stars into implicit positives.
+
+    A rating >= min_rating counts as a "positive" (they liked it). Lower ratings
+    are dropped -- a 1-star review means they DISLIKED it, which we'd never want
+    to recommend.
+    """
+    df = pd.read_csv(path)
+    df = df[df['rating'] >= min_rating].copy()
+    df["weight"] = 1.0
+    df = df.rename(columns={"user_id": "user", "parent_asin": "item"})
+    df["event"] = "rating"                              # keep column so the shape matches data.py
     return df[["timestamp", "user", "item", "event", "weight"]]
 
 

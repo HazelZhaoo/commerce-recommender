@@ -1,79 +1,89 @@
 # Commerce Recommendation & Ranking System
 
-> 🚧 **In progress.** An implicit-feedback product recommender on real e-commerce behavior, built with a leakage-safe evaluation protocol and an honest baseline-vs-personalization comparison.
+An implicit-feedback product recommender built with a **leakage-safe evaluation protocol**, an honest **baseline-vs-personalization** benchmark, and an **end-to-end serving layer** (FastAPI + a searchable web demo). Validated on **two independent datasets**.
 
 ## Problem
 
-Can a personalized recommender produce more relevant top-10 product rankings than a non-personalized **popularity baseline** — while keeping useful catalog coverage — on real, timestamped commerce behavior?
+Can a personalized recommender produce more relevant top-10 rankings than a non-personalized **popularity baseline** — while keeping useful catalog coverage — on real, timestamped behavior?
 
-The signal here isn't just calling an algorithm library; it's the **defensible choices**: temporal validation, leakage prevention, baselines, ranking metrics, and cold-start handling.
+The signal here isn't just calling a library; it's the **defensible choices**: temporal validation, leakage prevention, honest baselines, ranking metrics, cold-start handling, and shipping the model behind an API.
 
 ## Approach
 
-- **Data:** [RetailRocket](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset) — 2.7M timestamped events (views, add-to-cart, transactions).
-- **Implicit feedback:** views / carts / purchases as graded positive signals (a missing pair means *"not observed"*, never *"disliked"*).
-- **Leakage-safe temporal split:** train only on past behavior; evaluate on future held-out interactions.
+- **Data (2 datasets):**
+  - [RetailRocket](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset) — 2.7M timestamped events (view / cart / transaction).
+  - [Amazon Reviews 2023 — CDs & Vinyl](https://amazon-reviews-2023.github.io/) — 4.8M ratings (explicit 1–5 → implicit positives at ≥4 stars).
+- **Leakage-safe temporal split:** one global time cutoff — train on the past, evaluate on the future. Train-only item eligibility; already-seen items excluded from both recommendations and ground truth.
 - **Models:** global popularity **baseline** vs. **ALS** matrix factorization (`implicit`).
-- **Metrics:** Recall@10, NDCG@10, Hit Rate@10, catalog coverage — plus cold-start / sparse-history slices.
+- **Metrics:** Recall@10, NDCG@10, Hit Rate@10, catalog coverage — evaluated separately for **warm** (returning) users and **cold-start** users (popularity fallback).
+
+## Results — Popularity baseline vs. ALS (warm users, leakage-safe temporal split)
+
+**RetailRocket** (n = 2,174 warm users):
+
+| Metric | Popularity | ALS | Lift |
+|---|---:|---:|:--:|
+| Recall@10 | 0.0077 | 0.0316 | **4.1×** |
+| Hit Rate@10 | 0.0216 | 0.0727 | **3.4×** |
+| NDCG@10 | 0.0047 | 0.0238 | **5.1×** |
+| Coverage (distinct items recommended) | ~31 | ~1,346 | **43×** |
+
+**Amazon CDs & Vinyl** (n = 11,548 warm users):
+
+| Metric | Popularity | ALS | Lift |
+|---|---:|---:|:--:|
+| Recall@10 | 0.0021 | 0.0075 | **3.6×** |
+| Hit Rate@10 | 0.0060 | 0.0230 | **3.9×** |
+| NDCG@10 | 0.0016 | 0.0052 | **3.3×** |
+| Coverage (distinct items recommended) | ~16 | ~1,592 | **~100×** |
+
+**Takeaways.** ALS beats popularity across the board on *both* datasets by a consistent ~3–5× on ranking metrics and ~40–100× on coverage — popularity shows everyone the same handful of bestsellers, while ALS actually personalizes. Absolute numbers are modest by design: the split is strictly leakage-safe and the data is sparse, so these reflect *honest* offline performance, not inflated metrics.
+
+## Serving layer — from model to system
+
+The trained model is served behind a **FastAPI** app, with a lightweight web demo:
+
+- `GET /recommend/{user_id}` — personalized top-K for a user (warm → ALS, unknown → popularity fallback).
+- `GET /search?q=` — find albums/products by title or artist (readable input).
+- `GET /similar/{id}` — item-to-item "customers who liked this also liked…" (ALS item vectors).
+- `GET /app` — a searchable, image-rich demo UI (browse by cover art).
+
+Offline training (`scripts/train.py`) saves model artifacts; the API loads them at startup and serves in milliseconds — the standard offline-train / online-serve split.
 
 ## Directory structure
 
 ```
 commerce-recommender/
-├── README.md
-├── requirements.txt
 ├── src/
-│   ├── data.py         # load, weight, filter, build sparse matrix
-│   ├── split.py        # leakage-safe temporal split + eligibility
-│   ├── baselines.py    # popularity recommender
-│   ├── models.py       # ALS (and optional BPR)
-│   └── evaluate.py     # ranking metrics + coverage
+│   ├── data.py        # loaders (RetailRocket events + Amazon ratings), filter, sparse matrix
+│   ├── split.py       # leakage-safe temporal split, eligibility, seen-item sets
+│   ├── baseline.py    # popularity recommender
+│   ├── model.py       # ALS matrix factorization + recommendation
+│   └── evaluate.py    # Recall@10 / NDCG@10 / Hit Rate@10 / coverage
 ├── scripts/
-│   └── train.py        # reproducible experiment entry point
-├── tests/              # metric + split correctness tests
-├── artifacts/          # results.csv, comparison outputs
-└── data/               # RetailRocket (gitignored — download separately)
+│   ├── train.py       # offline: train ALS, save artifacts
+│   └── build_meta.py  # build item metadata lookup (title / artist / image) for the demo
+├── serve/app.py       # FastAPI: /recommend, /search, /similar, /app
+├── web/index.html     # searchable album-cover demo UI
+├── artifacts/         # saved model + maps + metadata (gitignored)
+└── data/              # datasets (gitignored — downloaded separately)
 ```
 
-## Getting the data
-
-```bash
-pip install kaggle          # requires a Kaggle API token at ~/.kaggle/kaggle.json
-kaggle datasets download -d retailrocket/ecommerce-dataset -p data --unzip
-```
-
-## Running (once complete)
+## Running
 
 ```bash
 pip install -r requirements.txt
-python scripts/train.py
+python -m scripts.train          # train + save artifacts (offline)
+python -m scripts.build_meta     # build the metadata lookup for the demo
+uvicorn serve.app:app --reload   # serve the API + demo at http://127.0.0.1:8000/app
 ```
 
-## Status
+## Next
 
-- [x] Data loading + implicit-feedback weighting
-- [ ] Leakage-safe temporal split
-- [ ] Popularity baseline
-- [ ] ALS model
-- [ ] Ranking-metric evaluation harness
-- [ ] Cold-start / sparsity analysis
-- [ ] Results table + write-up
-
-## Results
-
-*Measured results and the baseline-vs-ALS comparison will be added here once the evaluation harness is complete. Numbers will reflect only what has actually been run.*
-
-## Roadmap — from model to system
-
-Once the modeling core (baseline vs. ALS, evaluated) is done, the next step is to wrap it in a **systems layer** so this is an *end-to-end ML system*, not just a notebook. This is the part that turns a modeling exercise into an ML-engineering project:
-
-- [ ] **Serving:** expose top-N recommendations behind a small **FastAPI** endpoint (`/recommend?user_id=...`).
-- [ ] **Packaging:** **Dockerize** so training + serving are reproducible with one command.
-- [ ] **Monitoring:** basic drift / freshness checks and request-latency logging.
-- [ ] *(stretch)* candidate-generation → ranking split, to mirror a real two-stage recsys.
-
-> **Why this matters:** a serving + Docker + monitoring layer around the model demonstrates more ML-engineering signal than adding more model variety. It's the difference between "I fit a model" and "I shipped a system."
+- [ ] Dockerize training + serving for one-command reproducibility.
+- [ ] Metric + split correctness tests (`tests/`).
+- [ ] Request-latency logging / basic monitoring.
 
 ---
 
-*Dataset: RetailRocket (via Kaggle, CC BY-NC-SA 4.0). Modeling with the [`implicit`](https://github.com/benfred/implicit) library.*
+*Datasets: RetailRocket (Kaggle, CC BY-NC-SA 4.0) and Amazon Reviews 2023 (McAuley Lab, UCSD). Modeling with the [`implicit`](https://github.com/benfred/implicit) library.*

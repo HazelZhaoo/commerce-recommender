@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CD Recommender · Amazon CDs & Vinyl</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2e37; --text:#e8eaed; --muted:#9aa0aa; --accent:#7c5cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { padding:32px 24px 8px; max-width:1100px; margin:0 auto; }
+  h1 { margin:0 0 6px; font-size:24px; }
+  p.sub { margin:0; color:var(--muted); font-size:14px; }
+  .controls { max-width:1100px; margin:16px auto; padding:0 24px; display:flex; gap:10px; flex-wrap:wrap; }
+  input { flex:1; min-width:260px; padding:12px 14px; border-radius:10px; border:1px solid var(--line);
+          background:var(--card); color:var(--text); font-size:15px; }
+  button { padding:12px 20px; border:0; border-radius:10px; background:var(--accent); color:#fff;
+           font-weight:600; cursor:pointer; font-size:14px; }
+  button:hover { opacity:.9; }
+  .examples { max-width:1100px; margin:0 auto; padding:0 24px; color:var(--muted); font-size:13px; }
+  .examples a { color:var(--accent); cursor:pointer; text-decoration:none; margin-right:12px; }
+  .heading { max-width:1100px; margin:22px auto 0; padding:0 24px; font-size:15px; color:var(--muted); }
+  .heading b { color:var(--text); }
+  .grid { max-width:1100px; margin:14px auto 60px; padding:0 24px;
+          display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+          display:flex; flex-direction:column; cursor:pointer; transition:transform .1s, border-color .1s; }
+  .card:hover { transform:translateY(-3px); border-color:var(--accent); }
+  .card img { width:100%; aspect-ratio:1; object-fit:cover; background:#000; }
+  .card .body { padding:10px 12px; }
+  .card .t { font-size:13px; font-weight:600; line-height:1.3; margin:0 0 4px;
+             display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .card .a { font-size:12px; color:var(--muted); margin:0;
+             display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>💿 CD Recommender</h1>
+    <p class="sub">Search an album or artist, then click any cover to find similar albums — powered by ALS item vectors on Amazon CDs &amp; Vinyl.</p>
+  </header>
+
+  <div class="controls">
+    <input id="q" value="Iron Maiden" placeholder="Search for an album or artist…"
+           onkeydown="if(event.key==='Enter') doSearch()" />
+    <button onclick="doSearch()">Search</button>
+  </div>
+  <div class="examples">
+    Try: <a onclick="setq('Iron Maiden')">Iron Maiden</a>
+         <a onclick="setq('Metallica')">Metallica</a>
+         <a onclick="setq('Beatles')">Beatles</a>
+         <a onclick="setq('Miles Davis')">Miles Davis</a>
+         <a onclick="setq('Johnny Cash')">Johnny Cash</a>
+  </div>
+
+  <div class="heading" id="heading"></div>
+  <div class="grid" id="grid"></div>
+
+<script>
+function setq(v){ document.getElementById('q').value = v; doSearch(); }
+
+function render(items){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (const r of items){
+    const card = document.createElement('div');
+    card.className = 'card';
+    const img = r.image || 'https://via.placeholder.com/300?text=no+image';
+    card.innerHTML = `
+      <img src="${img}" loading="lazy" onerror="this.style.opacity=.15" />
+      <div class="body">
+        <p class="t">${r.title ?? r.asin}</p>
+        <p class="a">${r.artist ?? ''}</p>
+      </div>`;
+    card.onclick = () => showSimilar(r.asin, r.title);
+    grid.appendChild(card);
+  }
+}
+
+async function doSearch(){
+  const q = document.getElementById('q').value.trim();
+  const heading = document.getElementById('heading');
+  heading.innerHTML = 'searching…';
+  const res = await fetch(`/search?q=${encodeURIComponent(q)}&k=18`);
+  const data = await res.json();
+  if (!data.results.length){ heading.innerHTML = `No matches for “${q}”.`; render([]); return; }
+  heading.innerHTML = `Search results for “<b>${q}</b>” — click any cover to find similar albums`;
+  render(data.results);
+}
+
+async function showSimilar(asin, title){
+  const heading = document.getElementById('heading');
+  heading.innerHTML = 'finding similar…';
+  window.scrollTo({top:0, behavior:'smooth'});
+  const res = await fetch(`/similar/${encodeURIComponent(asin)}?k=18`);
+  const data = await res.json();
+  heading.innerHTML = `🎧 More like <b>${title ?? asin}</b> — click any cover to keep exploring`;
+  render(data.results);
+}
+
+doSearch();
+</script>
+</body>
+</html>
